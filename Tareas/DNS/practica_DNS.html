@@ -1,0 +1,78 @@
+<html><head><meta charset="UTF-8"><title>practica_DNS.md</title></head><body><h1 id="proyecto-dns">Proyecto DNS</h1><p><strong>Autor</strong>: Carlos Sesma</p><p><strong>Fecha</strong>: 2022-12-07</p><hr><div class="toc"><ul><li><a href="#proyecto-dns">Proyecto DNS</a><ul><li><a href="#introducci%C3%B3n">Introducción</a></li><li><a href="#objetivos">Objetivos</a></li><li><a href="#procedimiento">Procedimiento</a><ul><li><a href="#actualizaci%C3%B3n-del-sistema">Actualización del sistema</a></li><li><a href="#configuraci%C3%B3n-de-la-red">Configuración de la red</a></li><li><a href="#instalaci%C3%B3n-y-configuraci%C3%B3n-del-servidor-dns">Instalación y configuración del servidor DNS</a></li><li><a href="#configuraci%C3%B3n--del-forwarder">Configuración del forwarder</a></li><li><a href="#prueba-de-resoluci%C3%B3n-externa">Prueba de resolución externa</a></li><li><a href="#creaci%C3%B3n-de-la-zona-directa">Creación de la zona directa</a></li><li><a href="#creaci%C3%B3n-de-la-zona-inversa">Creación de la zona inversa</a></li><li><a href="#reiniciar-el-servicio-de-dns">Reiniciar el servicio de DNS</a></li><li><a href="#prueba-de-resoluci%C3%B3n-interna">Prueba de resolución interna</a></li><li><a href="#prueba-de-resoluci%C3%B3n-desde-cliente">Prueba de resolución desde cliente</a></li></ul></li></ul></li></ul></div><hr><h2 id="introducción">Introducción</h2><p>El DNS es un servicio encargado de traducir nombres de dominio en direcciones IP y viceversa. Es un servicio muy importante en la red, ya que permite que los usuarios puedan acceder a los recursos de la red de forma más sencilla evitando tener que memorizar las direcciones IP de los recursos.</p><p>En este proyecto vamos a realizar la configuración de un servidor DNS en un servidor Ubuntu Server 20.04. Para ello vamos a utilizar el servicio de DNS BIND9.</p><hr><h2 id="objetivos">Objetivos</h2><ul><li>Instalar y configurar un servidor DNS en Ubuntu Server 20.04.</li><li>Configurar el servidor DNS para que resuelva los nombres de dominio de nuestra red.</li><li>Configurar el servidor DNS para que resuelva los nombres de dominio de Internet mediante un servidor DNS externo.</li></ul><div style="page-break-after:always"></div><h2 id="procedimiento">Procedimiento</h2><h3 id="actualización-del-sistema">Actualización del sistema</h3><p>Antes de comenzar con la instalación, vamos a actualizar el sistema para asegurarnos de que tenemos la última versión de los paquetes.</p><pre><code class="language-bash">sudo apt update
+sudo apt upgrade
+</code></pre><h3 id="configuración-de-la-red">Configuración de la red</h3><p>Vamos a configurar la red de nuestro servidor Ubuntu Server 20.04 para que tenga una dirección IP estática.</p><pre><code class="language-bash">sudo nano /etc/netplan/00-installer-config.yaml
+</code></pre><pre><code class="language-yaml">network:
+  ethernets:
+    ens33:
+      dhcp4: false
+      optional: true
+      addresses: [192.168.85.1/24]
+</code></pre><p><img src="./images/1.png" alt="01"></p><div style="page-break-after:always"></div><h3 id="instalación-y-configuración-del-servidor-dns">Instalación y configuración del servidor DNS</h3><p>Vamos a instalar el servicio de DNS <em>BIND9</em> y el conjunto de herramientas <em>DNSUTILS</em> en nuestro servidor Ubuntu Server 20.04.</p><pre><code class="language-bash">sudo apt install bind9 dnsutils
+</code></pre><p><img src="./images/2.png" alt="02"></p><h3 id="configuración--del-forwarder">Configuración del forwarder</h3><p>Vamos a configurar el servidor DNS para que resuelva los nombres de dominio de Internet mediante un servidor DNS externo.</p><pre><code class="language-bash">sudo vim /etc/bind/named.conf.options
+</code></pre><pre><code class="language-conf">options {
+    directory &quot;/var/cache/bind&quot;;
+
+    forwarders {
+        1.1.1.1;
+    }
+    dnssec-validation auto;
+    listen-on-v6 { any; };
+};
+</code></pre><p><img src="./images/3.png" alt="03"></p><p>Una vez configurado el forwarder, vamos a reiniciar el servicio de DNS.</p><p>Podemos mirar el estado del servicio para comprobar que se ha iniciado correctamente y que no hay ningún error.</p><pre><code class="language-bash">sudo systemctl restart bind9
+sudo systemctl status bind9
+</code></pre><p><img src="./images/4.png" alt="04"></p><div style="page-break-after:always"></div><h3 id="prueba-de-resolución-externa">Prueba de resolución externa</h3><p>Vamos a comprobar que el servidor DNS resuelve correctamente los nombres de dominio de Internet.</p><pre><code class="language-bash">nslookup blog.usarr.tech
+</code></pre><p>Cuando ejecutemos el comando anterior, nos debería aparecer la siguiente salida:</p><p>Output:</p><pre><code class="language-bash">Server:         127.0.0.53
+Address:        127.0.0.53#53
+
+Non-authoritative answer:
+blog.usarr.tech       canonical name = cname.vercel-dns.com.
+Name:   cname.vercel-dns.com
+Address:    76.76.21.241
+Name:   cname.vercel-dns.com
+Address: 76.76.21.9
+</code></pre><p><img src="./images/5.png" alt="05"></p><div style="page-break-after:always"></div><h3 id="creación-de-la-zona-directa">Creación de la zona directa</h3><p>Vamos a crear la zona directa para la red dawv.net.</p><pre><code class="language-bash">sudo vim /etc/bind/named.conf.local
+</code></pre><pre><code class="language-conf">zone &quot;dawv.net&quot; {
+   type master;
+   file &quot;/etc/bind/db.dawv.net&quot;;
+};
+</code></pre><p><img src="./images/6.png" alt="06"></p><p>Vamos a crear el fichero de la zona directa. Para ello copiamos el fichero de ejemplo que nos proporciona el servicio de DNS BIND9.</p><pre><code class="language-bash">sudo cp /etc/bind/db.local /etc/bind/db.dawv.net
+</code></pre><div style="page-break-after:always"></div><p>Despues de copiarlo, vamos a modificar el fichero para que contenga la información de nuestra zona directa remplazando los datos de ejemplo por nuestros datos.</p><pre><code class="language-bash">sudo vim /etc/bind/db.dawv.net
+</code></pre><pre><code class="language-conf">$TTL    604800
+@       IN      SOA     dawv.net. admin.dawv.net. (
+                           222          ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+;
+@       IN      NS      ns.dawv.net.
+@       IN      A       192.168.85.1
+@       IN      AAAA    ::1
+ns      IN      A       192.168.85.1
+cliente IN      A       192.168.85.254
+</code></pre><p><img src="./images/7.png" alt="07"></p><h3 id="creación-de-la-zona-inversa">Creación de la zona inversa</h3><p>Para esto vamos a repetir los pasos que hemos realizado para la zona directa, pero en este caso vamos a clonear el fichero de ejemplo de la zona inversa.</p><pre><code class="language-bash">sudo cp /etc/bind/db.127 /etc/bind/db.85.168.192
+</code></pre><p>Despues de copiarlo, vamos a modificar el fichero para que contenga la información de nuestra zona inversa remplazando los datos de ejemplo por nuestros datos.</p><pre><code class="language-bash">sudo vim /etc/bind/db.85.168.192
+</code></pre><pre><code class="language-conf">$TTL    604800
+@       IN      SOA     ns.dawv.net. admin.dawv.net. (
+                            123         ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+;
+@       IN      NS      ns.
+1       IN      PTR     ns.dawv.net.
+254     IN      PTR     cliente.dawv.net.
+</code></pre><p><img src="./images/8.png" alt="08"></p><h3 id="reiniciar-el-servicio-de-dns">Reiniciar el servicio de DNS</h3><p>Reinciaremos el servicio de DNS para que se apliquen los cambios. Luego comprobaremos que el servicio se ha iniciado correctamente y que no hay ningún error.</p><pre><code class="language-bash">sudo systemctl restart bind9
+sudo systemctl status bind9
+</code></pre><div style="page-break-after:always"></div><h3 id="prueba-de-resolución-interna">Prueba de resolución interna</h3><p>Una vez reiniciado ya nos deberia de funcionar la resolución interna.</p><pre><code class="language-bash">nslookup ns.dawv.net
+</code></pre><p>Output:</p><pre><code class="language-bash">Server:         127.0.0.53
+Address:        127.0.0.53#53
+
+Non-authoritative answer:
+Name:   ns.dawv.net
+Address: 192.168.85.1
+</code></pre><p><img src="./images/9.png" alt="09"></p><div style="page-break-after:always"></div><h3 id="prueba-de-resolución-desde-cliente">Prueba de resolución desde cliente</h3><p>Vamos a comprobar que el servicio funciona correctamente desde el cliente.</p><p>Para ello configuramos en el panel de control de Windows la dirección IP del servidor DNS.</p><p>Para ello vamos a abrir el panel de control y vamos a entrar en la opción de centro de redes y recursos compartidos. Una vez dentro vamos a seleccionar la opción de adaptador de red. En la ventana que se nos abre, vamos a seleccionar la opción de Internet Protocol Version 4 (TCP/IPv4) y vamos a pulsar en propiedades.</p><p><img src="images/14.png" alt="14"></p><p>Para confirmar que se ha cambiado podemos comprobarlo desde la consola de Windows.</p><pre><code class="language-powershell">ipconfig /all
+</code></pre><p>Y nos mostrará la información de la tarjeta de red. <img src="./images/10.png" alt="10"></p><div style="page-break-after:always"></div><p>Comprobamos que el servicio resuelve correctamente desde el cliente.</p><pre><code class="language-powershell">nslookup cliente.dawv.net
+nslookup ns.dawv.net
+</code></pre><p><img src="./images/12.png" alt="12"> <img src="./images/13.png" alt="13"></p><style>body{font-size:1.2em;font-family:system-ui}.toc ul{list-style:none}</style></body></html>`
